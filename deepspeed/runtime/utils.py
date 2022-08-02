@@ -118,7 +118,7 @@ def copy_to_device(item, device, criterion_func):
     elif isinstance(item, list):
         return [copy_to_device(v, device, criterion_func) for v in item]
     elif isinstance(item, tuple):
-        return tuple([copy_to_device(v, device, criterion_func) for v in item])
+        return tuple(copy_to_device(v, device, criterion_func) for v in item)
     elif isinstance(item, dict):
         return {k: copy_to_device(v, device, criterion_func) for k, v in item.items()}
     else:
@@ -144,7 +144,7 @@ def move_to_device(item, device, criterion_func):
     elif isinstance(item, list):
         return [move_to_device(v, device, criterion_func) for v in item]
     elif isinstance(item, tuple):
-        return tuple([move_to_device(v, device, criterion_func) for v in item])
+        return tuple(move_to_device(v, device, criterion_func) for v in item)
     elif isinstance(item, dict):
         return {k: move_to_device(v, device, criterion_func) for k, v in item.items()}
     else:
@@ -199,7 +199,7 @@ class CheckOverflow(object):
             has_moe_params = self.has_moe_params
         else:
             assert param_groups is not None, \
-                "self.params and param_groups both cannot be none"
+                    "self.params and param_groups both cannot be none"
 
             for group in param_groups:
                 for param in group:
@@ -211,10 +211,10 @@ class CheckOverflow(object):
 
     # `params` is a list / generator of torch.Variable
     def has_overflow_serial(self, params):
-        for i, p in enumerate(params):
-            if p.grad is not None and self._has_inf_or_nan(p.grad.data, i):
-                return True
-        return False
+        return any(
+            p.grad is not None and self._has_inf_or_nan(p.grad.data, i)
+            for i, p in enumerate(params)
+        )
 
     def has_overflow(self, params, has_moe_params=None):
         if has_moe_params is None:
@@ -277,20 +277,26 @@ class CheckOverflow(object):
                 raise
             return True
         else:
-            if cpu_sum == float('inf') or cpu_sum == -float('inf') or cpu_sum != cpu_sum:
-                return True
-            return False
+            return (
+                cpu_sum == float('inf')
+                or cpu_sum == -float('inf')
+                or cpu_sum != cpu_sum
+            )
 
 
 def _handle_overflow(cpu_sum, x, i):
     import math
     rank = torch.distributed.get_rank()
     if rank == 0:
-        t_i = -1
-        for v_i, v in enumerate(x.data.contiguous().view(-1)):
-            if not math.isfinite(float(v)):
-                t_i = v_i
-                break
+        t_i = next(
+            (
+                v_i
+                for v_i, v in enumerate(x.data.contiguous().view(-1))
+                if not math.isfinite(float(v))
+            ),
+            -1,
+        )
+
         logger.info(
             f"rank {rank} detected overflow {cpu_sum} in tensor {i}:{t_i} shape {x.shape}"
         )
@@ -343,15 +349,14 @@ def clip_grad_norm_(parameters, max_norm, norm_type=2, mpu=None):
     else:
         total_norm = 0
         for p in parameters:
-            if mpu is not None:
-                if (mpu.get_model_parallel_rank() == 0
-                    ) or is_model_parallel_parameter(p):
-                    param_norm = p.grad.data.norm(norm_type)
-                    total_norm += param_norm.item()**norm_type
-            else:
+            if mpu is None:
                 param_norm = p.grad.data.float().norm(norm_type)
                 total_norm += param_norm.item()**norm_type
 
+            elif (mpu.get_model_parallel_rank() == 0
+                    ) or is_model_parallel_parameter(p):
+                param_norm = p.grad.data.norm(norm_type)
+                total_norm += param_norm.item()**norm_type
         # Sum across all model parallel GPUs.
         total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
         if mpu is not None:
@@ -551,7 +556,7 @@ def prefix_sum_inc(weights):
         >>> prefix_sum_inc([3,4,5])
         [3, 7, 12]
     """
-    weights_ = [w for w in weights]
+    weights_ = list(weights)
     for x in range(1, len(weights_)):
         weights_[x] += weights_[x - 1]
     return weights_
@@ -729,11 +734,9 @@ class PartitionedTensor:
         Returns:
             torch.LongTensor: a tensor encoding the meta-information for the partitioning
         """
-        meta = []
-        meta.append(len(self.orig_size))
+        meta = [len(self.orig_size)]
         meta += list(self.orig_size)
-        meta.append(self.num_parts)
-        meta.append(self.rank)
+        meta.extend((self.num_parts, self.rank))
         meta += self.partition
         return torch.LongTensor(data=meta).to(self.orig_device)
 
@@ -794,7 +797,10 @@ def memory_status(msg, print_rank=-1, reset_max=False):
 
 
 def get_ma_status():
-    if torch.distributed.is_initialized() and not torch.distributed.get_rank() == 0:
+    if (
+        torch.distributed.is_initialized()
+        and torch.distributed.get_rank() != 0
+    ):
         return 0
     return torch.cuda.memory_allocated()
 
@@ -802,7 +808,10 @@ def get_ma_status():
 def see_memory_usage(message, force=False):
     if not force:
         return
-    if torch.distributed.is_initialized() and not torch.distributed.get_rank() == 0:
+    if (
+        torch.distributed.is_initialized()
+        and torch.distributed.get_rank() != 0
+    ):
         return
 
     # python doesn't do real-time garbage collection so do it explicitly to get the correct RAM reports

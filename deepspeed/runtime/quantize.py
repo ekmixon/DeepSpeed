@@ -132,29 +132,30 @@ class Quantizer(object):
         # to go slowly toward the target quantization bits
         # the period and starting bit can be configured
         if self.q_offset > 0:
-            if self.qsteps >= self.q_offset:
-                self.q_offset = 0
-                self.qsteps = 0
-            else:
+            if self.qsteps < self.q_offset:
                 return input
 
-        if self.q_start_bits[index] != self.q_target_bits:
-            if self.qsteps >= self.q_period[index]:
-                self.quantize_real_ratio = 1.0
-                if self.q_eigenvalue:
-                    self.q_period[index] <<= 1
-                    self.q_period[index] *= factor
-                    self.q_start_bits[index] -= 1
-                else:
-                    for i in range(len(self.q_start_bits)):
-                        self.q_start_bits[i] -= 1
-                        self.q_period[i] <<= 1
-                if self.q_verbose:
-                    logger.info(
-                        f'Quantization settings: current bit-precision = {self.q_start_bits[index]}, step = {self.qsteps}, quantization period = {self.q_period[index]}, index = {index}'
-                    )
+            self.q_offset = 0
+            self.qsteps = 0
+        if (
+            self.q_start_bits[index] != self.q_target_bits
+            and self.qsteps >= self.q_period[index]
+        ):
+            self.quantize_real_ratio = 1.0
+            if self.q_eigenvalue:
+                self.q_period[index] <<= 1
+                self.q_period[index] *= factor
+                self.q_start_bits[index] -= 1
+            else:
+                for i in range(len(self.q_start_bits)):
+                    self.q_start_bits[i] -= 1
+                    self.q_period[i] <<= 1
+            if self.q_verbose:
+                logger.info(
+                    f'Quantization settings: current bit-precision = {self.q_start_bits[index]}, step = {self.qsteps}, quantization period = {self.q_period[index]}, index = {index}'
+                )
         assert (self.q_start_bits[index] >= self.q_target_bits), \
-            'Quantization bit is lower than target precision bits!'
+                'Quantization bit is lower than target precision bits!'
 
         # quantize the weights base on the selected bits and the value-range
         if not self.use_quantizer_kernel:
@@ -173,48 +174,42 @@ class Quantizer(object):
                                                         (q_range >> 1) - 1) / s for g,
                                   s in zip(input_g,
                                            scale)]
-                else:  # Stochastic Rounding
-                    if self.use_quantizer_kernel:
-                        input_q = ds_quantizer(input.clone(),
-                                               self.q_groups,
-                                               self.q_start_bits[index],
-                                               sr=True)
-                    else:
-                        input_flat = self.sr_quantize(input_flat, input_g)
-        else:  #asymmetric
-            if self.q_rounding == 0:
-                if self.use_quantizer_kernel:
+                elif self.use_quantizer_kernel:
                     input_q = ds_quantizer(input.clone(),
                                            self.q_groups,
                                            self.q_start_bits[index],
-                                           asym=True)
+                                           sr=True)
                 else:
-                    scale = [(g.max() - g.min()) / q_range for g in input_g]
-                    input_flat = [
-                        ((g - g.min()) / s).round().clamp(0,
-                                                          (q_range - 1)) * s + g.min()
-                        for g,
-                        s in zip(input_g,
-                                 scale)
-                    ]
-            else:
-                input_q = ds_quantizer(input.clone(),
-                                       self.q_groups,
-                                       self.q_start_bits[index],
-                                       asym=True)
-
+                    input_flat = self.sr_quantize(input_flat, input_g)
+        elif (
+            self.q_rounding == 0
+            and self.use_quantizer_kernel
+            or self.q_rounding != 0
+        ):
+            input_q = ds_quantizer(input.clone(),
+                                   self.q_groups,
+                                   self.q_start_bits[index],
+                                   asym=True)
+        else:
+            scale = [(g.max() - g.min()) / q_range for g in input_g]
+            input_flat = [
+                ((g - g.min()) / s).round().clamp(0,
+                                                  (q_range - 1)) * s + g.min()
+                for g,
+                s in zip(input_g,
+                         scale)
+            ]
         if self.use_quantizer_kernel or (self.q_type and self.q_rounding):
             return self.mixed_fp16_quantize(input, input_q, index)
-        else:
-            if self.q_mixed_fp16 and self.q_start_bits[index] >= (self.q_target_bits -
-                                                                  1):
-                input_flat = [(self.quantize_real_ratio * g) +
-                              ((1 - self.quantize_real_ratio) * g_q) for g,
-                              g_q in zip(input_g,
-                                         input_flat)]
-            input_q = torch.cat(input_flat)
-            input_q = input_q.reshape(input.size())
-            return input_q
+        if self.q_mixed_fp16 and self.q_start_bits[index] >= (self.q_target_bits -
+                                                              1):
+            input_flat = [(self.quantize_real_ratio * g) +
+                          ((1 - self.quantize_real_ratio) * g_q) for g,
+                          g_q in zip(input_g,
+                                     input_flat)]
+        input_q = torch.cat(input_flat)
+        input_q = input_q.reshape(input.size())
+        return input_q
 
     def update_fp16_ratio(self):
         if self.q_mixed_fp16:

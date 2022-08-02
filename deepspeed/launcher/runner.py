@@ -136,7 +136,7 @@ def fetch_hostfile(hostfile_path):
     # e.g., worker-0 slots=16
     with open(hostfile_path, 'r') as fd:
         resource_pool = collections.OrderedDict()
-        for line in fd.readlines():
+        for line in fd:
             line = line.strip()
             if line == '':
                 # skip empty lines
@@ -186,7 +186,7 @@ def parse_resource_filter(host_info, include_str="", exclude_str=""):
         return host_info
 
     # Either build from scratch or remove items
-    filtered_hosts = dict()
+    filtered_hosts = {}
     if include_str:
         parse_str = include_str
     if exclude_str != "":
@@ -260,8 +260,7 @@ def parse_inclusion_exclusion(resource_pool, inclusion, exclusion):
 
 def encode_world_info(world_info):
     world_info_json = json.dumps(world_info).encode('utf-8')
-    world_info_base64 = base64.urlsafe_b64encode(world_info_json).decode('utf-8')
-    return world_info_base64
+    return base64.urlsafe_b64encode(world_info_json).decode('utf-8')
 
 
 def run_autotuning(args, active_resources):
@@ -280,9 +279,10 @@ def run_autotuning(args, active_resources):
 def main(args=None):
     args = parse_args(args)
 
-    if args.num_nodes >= 0 or args.num_gpus >= 0:
-        if args.include != "" or args.exclude != "":
-            raise ValueError("Cannot specify num_nodes/gpus with include/exclude")
+    if (args.num_nodes >= 0 or args.num_gpus >= 0) and (
+        args.include != "" or args.exclude != ""
+    ):
+        raise ValueError("Cannot specify num_nodes/gpus with include/exclude")
 
     multi_node_exec = True
     resource_pool = fetch_hostfile(args.hostfile)
@@ -332,20 +332,7 @@ def main(args=None):
     # encode world info as base64 to make it easier to pass via command line
     world_info_base64 = encode_world_info(active_resources)
 
-    multi_node_exec = args.force_multi or len(active_resources) > 1
-
-    if not multi_node_exec:
-        deepspeed_launch = [
-            sys.executable,
-            "-u",
-            "-m",
-            "deepspeed.launcher.launch",
-            f"--world_info={world_info_base64}",
-            f"--master_addr={args.master_addr}",
-            f"--master_port={args.master_port}"
-        ]
-        cmd = deepspeed_launch + [args.user_script] + args.user_args
-    else:
+    if multi_node_exec := args.force_multi or len(active_resources) > 1:
         args.launcher = args.launcher.lower()
         if args.launcher == PDSH_LAUNCHER:
             runner = PDSHRunner(args, world_info_base64)
@@ -360,26 +347,38 @@ def main(args=None):
             raise RuntimeError(f"launcher '{args.launcher}' not installed.")
 
         curr_path = os.path.abspath('.')
-        if 'PYTHONPATH' in env:
-            env['PYTHONPATH'] = curr_path + ":" + env['PYTHONPATH']
-        else:
-            env['PYTHONPATH'] = curr_path
+        env['PYTHONPATH'] = (
+            f"{curr_path}:" + env['PYTHONPATH']
+            if 'PYTHONPATH' in env
+            else curr_path
+        )
 
         exports = ""
         for var in env.keys():
-            if any([var.startswith(name) for name in EXPORT_ENVS]):
+            if any(var.startswith(name) for name in EXPORT_ENVS):
                 runner.add_export(var, env[var])
 
         for environ_path in DEEPSPEED_ENVIRONMENT_PATHS:
             environ_file = os.path.join(environ_path, DEEPSPEED_ENVIRONMENT_NAME)
             if os.path.isfile(environ_file):
                 with open(environ_file, 'r') as fd:
-                    for var in fd.readlines():
+                    for var in fd:
                         key, val = var.split('=')
                         runner.add_export(key, val)
 
         cmd = runner.get_cmd(env, active_resources)
 
+    else:
+        deepspeed_launch = [
+            sys.executable,
+            "-u",
+            "-m",
+            "deepspeed.launcher.launch",
+            f"--world_info={world_info_base64}",
+            f"--master_addr={args.master_addr}",
+            f"--master_port={args.master_port}"
+        ]
+        cmd = deepspeed_launch + [args.user_script] + args.user_args
     logger.info(f"cmd = {' '.join(cmd)}")
     result = subprocess.Popen(cmd, env=env)
     result.wait()

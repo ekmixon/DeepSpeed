@@ -57,9 +57,13 @@ class MoE(torch.nn.Module):
         super(MoE, self).__init__()
 
         assert groups.is_initialized(), \
-            'Please call deepspeed.utils.groups.initialize() before using MoE layers'
-        assert noisy_gate_policy is None or noisy_gate_policy in ['None', 'Jitter', 'RSample'], \
-            'Unsupported noisy_gate_policy: ' + noisy_gate_policy
+                'Please call deepspeed.utils.groups.initialize() before using MoE layers'
+        assert noisy_gate_policy is None or noisy_gate_policy in [
+            'None',
+            'Jitter',
+            'RSample',
+        ], f'Unsupported noisy_gate_policy: {noisy_gate_policy}'
+
 
         num_local_experts = num_experts // groups.get_expert_parallel_world_size()
 

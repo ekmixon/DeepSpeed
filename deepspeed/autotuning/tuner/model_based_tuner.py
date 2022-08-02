@@ -59,10 +59,12 @@ class ModelBasedTuner(BaseTuner):
 
         for c in self.all_configs:
             flattened_ds_config = flatten(c)
-            feature_val = []
-            for k, v in flattened_ds_config.items():
-                if isinstance(v, numbers.Number):
-                    feature_val.append(v)
+            feature_val = [
+                v
+                for k, v in flattened_ds_config.items()
+                if isinstance(v, numbers.Number)
+            ]
+
             configs.append(feature_val)
         # print(configs)
         # TODO the current implementation requires that all configs have the same shape.
@@ -71,23 +73,19 @@ class ModelBasedTuner(BaseTuner):
 
         n = len(estimates)
         top_idx = np.argsort(estimates)
-        top_idx_ret = top_idx if self.metric == AUTOTUNING_METRIC_LATENCY else top_idx[::
-                                                                                       -1][:
-                                                                                           n]
-
         # top_configs = [self.all_configs[i] for i in top_idx]
 
-        return top_idx_ret
+        return (
+            top_idx
+            if self.metric == AUTOTUNING_METRIC_LATENCY
+            else top_idx[::-1][:n]
+        )
 
     def next_batch(self, sample_size):
         sampled_batch = []
 
         counter = 0
-        while counter < sample_size:
-
-            if len(self.visited) >= self.num_all_configs:
-                break
-
+        while counter < sample_size and len(self.visited) < self.num_all_configs:
             while self.trial_pt < len(self.trials):
                 logger.debug(f"trials: {self.trials}")
                 # Select top promising trials
@@ -124,9 +122,12 @@ class ModelBasedTuner(BaseTuner):
                 )
                 ds_config = exp["ds_config"]
                 flattened_ds_config = flatten(ds_config)
-                for k, v in flattened_ds_config.items():
-                    if isinstance(v, numbers.Number):
-                        feature_val.append(v)
+                feature_val.extend(
+                    v
+                    for k, v in flattened_ds_config.items()
+                    if isinstance(v, numbers.Number)
+                )
+
                 self.evaluated_configs.append(feature_val)
                 self.evaluated_perf.append(0.0)
                 continue
@@ -139,9 +140,12 @@ class ModelBasedTuner(BaseTuner):
 
                 ds_config = exp["ds_config"]
                 flattened_ds_config = flatten(ds_config)
-                for k, v in flattened_ds_config.items():
-                    if isinstance(v, numbers.Number):
-                        feature_val.append(v)
+                feature_val.extend(
+                    v
+                    for k, v in flattened_ds_config.items()
+                    if isinstance(v, numbers.Number)
+                )
+
                 self.evaluated_configs.append(feature_val)
                 self.evaluated_perf.append(curr_iter)
 

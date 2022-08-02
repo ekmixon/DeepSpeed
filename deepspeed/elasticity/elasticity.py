@@ -84,10 +84,14 @@ def get_valid_gpus(batch_size, micro_batches, min_valid_gpus, max_valid_gpus):
             if max_gpus >= min_valid_gpus and max_gpus <= max_valid_gpus:
                 valid_gpus.append(max_gpus)
 
-            for i in range(1, max_gpus // 2 + 1):
-                if max_gpus % i == 0:
-                    if i >= min_valid_gpus and i <= max_valid_gpus:
-                        valid_gpus.append(i)
+            valid_gpus.extend(
+                i
+                for i in range(1, max_gpus // 2 + 1)
+                if max_gpus % i == 0
+                and i >= min_valid_gpus
+                and i <= max_valid_gpus
+            )
+
     valid_gpus = set(valid_gpus)
     valid_gpus = sorted(list(valid_gpus))
     return valid_gpus
@@ -288,30 +292,34 @@ def compute_elastic_config(ds_config: dict, target_deepspeed_version: str, world
         raise ElasticityError("Unable to run elasticity on target deepspeed version of" \
             f" {target_deepspeed_version}, currently {__version__}")
 
-    if float(elastic_config.version) == 0.1:
-        final_batch_size, valid_gpus = _get_compatible_gpus_v01(
-            micro_batches=elastic_config.micro_batches,
-            max_acceptable_batch_size=elastic_config.max_acceptable_batch_size,
-            min_gpus=elastic_config.min_gpus,
-            max_gpus=elastic_config.max_gpus,
-            prefer_larger=elastic_config.prefer_larger_batch_size)
-        # ensure batch size is int dtype
-        final_batch_size = int(final_batch_size)
-    else:
+    if float(elastic_config.version) != 0.1:
         raise NotImplementedError(
             f"Unable to find elastic logic for version: {elastic_config.version}")
 
+    final_batch_size, valid_gpus = _get_compatible_gpus_v01(
+        micro_batches=elastic_config.micro_batches,
+        max_acceptable_batch_size=elastic_config.max_acceptable_batch_size,
+        min_gpus=elastic_config.min_gpus,
+        max_gpus=elastic_config.max_gpus,
+        prefer_larger=elastic_config.prefer_larger_batch_size)
+    # ensure batch size is int dtype
+    final_batch_size = int(final_batch_size)
     if world_size > 0:
         if world_size not in valid_gpus:
             raise ElasticityIncompatibleWorldSize(f"World size ({world_size}) is not valid " \
         f"with the current list of valid GPU counts: {valid_gpus}")
 
-        # Pick largest valid micro batch size
-        micro_batch_size = None
-        for mbsz in sorted(list(set(elastic_config.micro_batches)), reverse=True):
-            if final_batch_size // world_size % mbsz == 0:
-                micro_batch_size = mbsz
-                break
+        micro_batch_size = next(
+            (
+                mbsz
+                for mbsz in sorted(
+                    list(set(elastic_config.micro_batches)), reverse=True
+                )
+                if final_batch_size // world_size % mbsz == 0
+            ),
+            None,
+        )
+
         assert micro_batch_size is not None, "Unable to find divisible micro batch size" \
             f" world_size={world_size}, final_batch_size={final_batch_size}, and " \
             f" micro_batches={elastic_config.micro_batches}."

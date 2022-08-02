@@ -84,12 +84,11 @@ def get_curriculum_enabled(param_dict):
 
 
 def get_curriculum_params(param_dict):
-    if CURRICULUM_LEARNING in param_dict.keys():
-        curriculum_params = copy.copy(param_dict[CURRICULUM_LEARNING])
-        curriculum_params.pop(CURRICULUM_ENABLED)
-        return curriculum_params
-    else:
+    if CURRICULUM_LEARNING not in param_dict.keys():
         return False
+    curriculum_params = copy.copy(param_dict[CURRICULUM_LEARNING])
+    curriculum_params.pop(CURRICULUM_ENABLED)
+    return curriculum_params
 
 
 def get_pld_enabled(param_dict):
@@ -102,12 +101,11 @@ def get_pld_enabled(param_dict):
 
 
 def get_pld_params(param_dict):
-    if PROGRESSIVE_LAYER_DROP in param_dict.keys():
-        pld_params = copy.copy(param_dict[PROGRESSIVE_LAYER_DROP])
-        pld_params.pop(PLD_ENABLED)
-        return pld_params
-    else:
+    if PROGRESSIVE_LAYER_DROP not in param_dict.keys():
         return False
+    pld_params = copy.copy(param_dict[PROGRESSIVE_LAYER_DROP])
+    pld_params.pop(PLD_ENABLED)
+    return pld_params
 
 
 def get_amp_enabled(param_dict):
@@ -118,12 +116,11 @@ def get_amp_enabled(param_dict):
 
 
 def get_amp_params(param_dict):
-    if AMP in param_dict.keys():
-        amp_params = copy.copy(param_dict[AMP])
-        amp_params.pop(AMP_ENABLED)
-        return amp_params
-    else:
+    if AMP not in param_dict.keys():
         return False
+    amp_params = copy.copy(param_dict[AMP])
+    amp_params.pop(AMP_ENABLED)
+    return amp_params
 
 
 def get_fp16_enabled(param_dict):
@@ -329,26 +326,24 @@ def get_gradient_clipping(param_dict):
 
 
 def get_sparse_attention(param_dict):
-    if SPARSE_ATTENTION in param_dict.keys():
-        sparsity = param_dict[SPARSE_ATTENTION]
-        mode = get_sparse_attention_mode(sparsity)
-
-        if mode == SPARSE_DENSE_MODE:
-            return get_sparse_dense_config(sparsity)
-        elif mode == SPARSE_FIXED_MODE:
-            return get_sparse_fixed_config(sparsity)
-        elif mode == SPARSE_VARIABLE_MODE:
-            return get_sparse_variable_config(sparsity)
-        elif mode == SPARSE_BIGBIRD_MODE:
-            return get_sparse_bigbird_config(sparsity)
-        elif mode == SPARSE_BSLONGFORMER_MODE:
-            return get_sparse_bslongformer_config(sparsity)
-        else:
-            raise NotImplementedError(
-                f"Given sparsity mode, {mode}, has not been implemented yet!")
-
-    else:
+    if SPARSE_ATTENTION not in param_dict.keys():
         return None
+    sparsity = param_dict[SPARSE_ATTENTION]
+    mode = get_sparse_attention_mode(sparsity)
+
+    if mode == SPARSE_DENSE_MODE:
+        return get_sparse_dense_config(sparsity)
+    elif mode == SPARSE_FIXED_MODE:
+        return get_sparse_fixed_config(sparsity)
+    elif mode == SPARSE_VARIABLE_MODE:
+        return get_sparse_variable_config(sparsity)
+    elif mode == SPARSE_BIGBIRD_MODE:
+        return get_sparse_bigbird_config(sparsity)
+    elif mode == SPARSE_BSLONGFORMER_MODE:
+        return get_sparse_bslongformer_config(sparsity)
+    else:
+        raise NotImplementedError(
+            f"Given sparsity mode, {mode}, has not been implemented yet!")
 
 
 def get_sparse_dense_config(sparsity):
@@ -823,11 +818,11 @@ class DeepSpeedConfig(object):
                 ]
                 if any(map(lambda t: t in self._param_dict, batch_params)):
                     raise ElasticityConfigError("One or more batch related parameters were found in your " \
-                        f"ds_config ({TRAIN_BATCH_SIZE}, {TRAIN_MICRO_BATCH_SIZE_PER_GPU}, and/or " \
-                        f"{GRADIENT_ACCUMULATION_STEPS}). These parameters *will not be used* since " \
-                        "elastic training is enabled, which takes control of these parameters. " \
-                        "If you want to suppress this error (the parameters will be silently ignored) " \
-                        f"please set {IGNORE_NON_ELASTIC_BATCH_INFO}':true in your elasticity config.")
+                            f"ds_config ({TRAIN_BATCH_SIZE}, {TRAIN_MICRO_BATCH_SIZE_PER_GPU}, and/or " \
+                            f"{GRADIENT_ACCUMULATION_STEPS}). These parameters *will not be used* since " \
+                            "elastic training is enabled, which takes control of these parameters. " \
+                            "If you want to suppress this error (the parameters will be silently ignored) " \
+                            f"please set {IGNORE_NON_ELASTIC_BATCH_INFO}':true in your elasticity config.")
 
             # micro_bsz * world_size * gas = total_batch_size
             # gas = total_batch_size // (micro_bsz * world_size)
@@ -1029,7 +1024,7 @@ class DeepSpeedConfig(object):
         # either none of the three parameters are provided or just gradient_accumulation_step is provided
         else:
             assert False, \
-                'Either train_batch_size or train_micro_batch_size_per_gpu needs to be provided'
+                    'Either train_batch_size or train_micro_batch_size_per_gpu needs to be provided'
 
     def _configure_train_batch_size(self):
         self._set_batch_related_parameters()
@@ -1041,11 +1036,11 @@ class DeepSpeedConfig(object):
         self._do_warning_check()
 
     def print(self, name):
-        logger.info("{}:".format(name))
+        logger.info(f"{name}:")
         for arg in sorted(vars(self)):
             if arg != "_param_dict":
                 dots = "." * (29 - len(arg))
-                logger.info("  {} {} {}".format(arg, dots, getattr(self, arg)))
+                logger.info(f"  {arg} {dots} {getattr(self, arg)}")
 
         logger.info("  json = {}".format(
             json.dumps(
@@ -1060,18 +1055,19 @@ class DeepSpeedConfig(object):
     def _do_error_check(self):
         assert (
             self.train_micro_batch_size_per_gpu
-        ), "DeepSpeedConfig: {} is not defined".format(TRAIN_MICRO_BATCH_SIZE_PER_GPU)
+        ), f"DeepSpeedConfig: {TRAIN_MICRO_BATCH_SIZE_PER_GPU} is not defined"
+
 
         assert (
             self.gradient_accumulation_steps
-        ), "DeepSpeedConfig: {} is not defined".format(GRADIENT_ACCUMULATION_STEPS)
+        ), f"DeepSpeedConfig: {GRADIENT_ACCUMULATION_STEPS} is not defined"
+
 
         if self.zero_enabled:
             assert (
                 self.zero_optimization_stage <= MAX_STAGE_ZERO_OPTIMIZATION
-            ), "DeepSpeedConfig: Maximum supported ZeRO stage is {}".format(
-                MAX_STAGE_ZERO_OPTIMIZATION
-            )
+            ), f"DeepSpeedConfig: Maximum supported ZeRO stage is {MAX_STAGE_ZERO_OPTIMIZATION}"
+
 
         if self.fp16_master_weights_and_gradients:
             assert self.zero_enabled and self.zero_optimization_stage == ZERO_OPTIMIZATION_GRADIENTS, "Fp16_master_weights_and_grads is only supported with ZeRO Stage 2 for now."
@@ -1082,9 +1078,9 @@ class DeepSpeedConfig(object):
         vocabulary_size = self._param_dict.get(VOCABULARY_SIZE, VOCABULARY_SIZE_DEFAULT)
         if vocabulary_size and vocabulary_size % TENSOR_CORE_ALIGN_SIZE != 0:
             logger.warning(
-                "DeepSpeedConfig: vocabulary size {} is not aligned to {}, may import tensor core utilization."
-                .format(vocabulary_size,
-                        TENSOR_CORE_ALIGN_SIZE))
+                f"DeepSpeedConfig: vocabulary size {vocabulary_size} is not aligned to {TENSOR_CORE_ALIGN_SIZE}, may import tensor core utilization."
+            )
+
 
         if (self.optimizer_params is not None
                 and MAX_GRAD_NORM in self.optimizer_params.keys()
@@ -1092,12 +1088,13 @@ class DeepSpeedConfig(object):
             if fp16_enabled:
                 if self.global_rank == 0:
                     logger.warning(
-                        "DeepSpeedConfig: In FP16 mode, DeepSpeed will pass {}:{} to FP16 wrapper"
-                        .format(MAX_GRAD_NORM,
-                                self.optimizer_params[MAX_GRAD_NORM]))
+                        f"DeepSpeedConfig: In FP16 mode, DeepSpeed will pass {MAX_GRAD_NORM}:{self.optimizer_params[MAX_GRAD_NORM]} to FP16 wrapper"
+                    )
+
             else:
                 if self.global_rank == 0:
                     logger.warning(
-                        "DeepSpeedConfig: In FP32 mode, DeepSpeed does not permit MAX_GRAD_NORM ({}) > 0, setting to zero"
-                        .format(self.optimizer_params[MAX_GRAD_NORM]))
+                        f"DeepSpeedConfig: In FP32 mode, DeepSpeed does not permit MAX_GRAD_NORM ({self.optimizer_params[MAX_GRAD_NORM]}) > 0, setting to zero"
+                    )
+
                 self.optimizer_params[MAX_GRAD_NORM] = 0.0

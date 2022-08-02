@@ -26,11 +26,8 @@ class ScientificNotationEncoder(json.JSONEncoder):
         prefix = " " * level * indent
         if isinstance(o, bool):
             return "true" if o else "false"
-        elif isinstance(o, float) or isinstance(o, int):
-            if o > 1e3:
-                return f"{o:e}"
-            else:
-                return f"{o}"
+        elif isinstance(o, (float, int)):
+            return f"{o:e}" if o > 1e3 else f"{o}"
         elif isinstance(o, collections.Mapping):
             x = [
                 f'\n{prefix}"{k}": {self.iterencode(v, level=level)}' for k,
@@ -38,7 +35,7 @@ class ScientificNotationEncoder(json.JSONEncoder):
             ]
             return "{" + ', '.join(x) + f"\n{prefix_close}" + "}"
         elif isinstance(o, collections.Sequence) and not isinstance(o, str):
-            return f"[{ f', '.join(map(self.iterencode, o)) }]"
+            return f"[{', '.join(map(self.iterencode, o))}]"
         return "\n, ".join(super().iterencode(o, _one_shot))
 
 
@@ -72,9 +69,9 @@ def get_dict_param(param_dict, param_name, param_default_value):
 
 def dict_raise_error_on_duplicate_keys(ordered_pairs):
     """Reject duplicate keys."""
-    d = dict((k, v) for k, v in ordered_pairs)
+    d = dict(ordered_pairs)
     if len(d) != len(ordered_pairs):
         counter = collections.Counter([pair[0] for pair in ordered_pairs])
         keys = [key for key, value in counter.items() if value > 1]
-        raise ValueError("Duplicate keys in DeepSpeed config: {}".format(keys))
+        raise ValueError(f"Duplicate keys in DeepSpeed config: {keys}")
     return d

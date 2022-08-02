@@ -79,7 +79,7 @@ class FlopsProfiler(object):
 
             def post_hook(module, input, output):
                 if module_flop_count:
-                    module.__flops__ += sum([elem[1] for elem in module_flop_count[-1]])
+                    module.__flops__ += sum(elem[1] for elem in module_flop_count[-1])
                     module_flop_count.pop()
 
             module.__post_hook_handle__ = module.register_forward_hook(post_hook)
@@ -497,10 +497,7 @@ def _conv_flops_compute(input,
     active_elements_count = batch_size * int(_prod(output_dims))
     overall_conv_flops = conv_per_position_flops * active_elements_count
 
-    bias_flops = 0
-    if bias is not None:
-        bias_flops = out_channels * active_elements_count
-
+    bias_flops = out_channels * active_elements_count if bias is not None else 0
     overall_flops = overall_conv_flops + bias_flops
 
     return int(overall_flops)
@@ -563,9 +560,7 @@ def _batch_norm_flops_compute(
     momentum=0.1,
     eps=1e-05,
 ):
-    # assume affine is true
-    flops = 2 * torch.numel(input)
-    return flops
+    return 2 * torch.numel(input)
 
 
 def _upsample_flops_compute(input,
@@ -736,16 +731,13 @@ def _rnn_forward_hook(rnn_module, input, output):
     num_layers = rnn_module.num_layers
 
     for i in range(num_layers):
-        w_ih = rnn_module.__getattr__("weight_ih_l" + str(i))
-        w_hh = rnn_module.__getattr__("weight_hh_l" + str(i))
-        if i == 0:
-            input_size = rnn_module.input_size
-        else:
-            input_size = rnn_module.hidden_size
+        w_ih = rnn_module.__getattr__(f"weight_ih_l{str(i)}")
+        w_hh = rnn_module.__getattr__(f"weight_hh_l{str(i)}")
+        input_size = rnn_module.input_size if i == 0 else rnn_module.hidden_size
         flops = _rnn_flops(flops, rnn_module, w_ih, w_hh, input_size)
         if rnn_module.bias:
-            b_ih = rnn_module.__getattr__("bias_ih_l" + str(i))
-            b_hh = rnn_module.__getattr__("bias_hh_l" + str(i))
+            b_ih = rnn_module.__getattr__(f"bias_ih_l{str(i)}")
+            b_hh = rnn_module.__getattr__(f"bias_hh_l{str(i)}")
             flops += b_ih.shape[0] + b_hh.shape[0]
 
     flops *= batch_size
@@ -785,11 +777,11 @@ MODULE_HOOK_MAPPING = {
 
 def num_to_string(num, precision=2):
     if num // 10**9 > 0:
-        return str(round(num / 10.0**9, precision)) + " G"
+        return f"{str(round(num / 10.0**9, precision))} G"
     elif num // 10**6 > 0:
-        return str(round(num / 10.0**6, precision)) + " M"
+        return f"{str(round(num / 10.0**6, precision))} M"
     elif num // 10**3 > 0:
-        return str(round(num / 10.0**3, precision)) + " K"
+        return f"{str(round(num / 10.0**3, precision))} K"
     else:
         return str(num)
 
@@ -797,83 +789,80 @@ def num_to_string(num, precision=2):
 def macs_to_string(macs, units=None, precision=2):
     if units is None:
         if macs // 10**9 > 0:
-            return str(round(macs / 10.0**9, precision)) + " GMACs"
+            return f"{str(round(macs / 10.0**9, precision))} GMACs"
         elif macs // 10**6 > 0:
-            return str(round(macs / 10.0**6, precision)) + " MMACs"
+            return f"{str(round(macs / 10.0**6, precision))} MMACs"
         elif macs // 10**3 > 0:
-            return str(round(macs / 10.0**3, precision)) + " KMACs"
+            return f"{str(round(macs / 10.0**3, precision))} KMACs"
         else:
-            return str(macs) + " MACs"
+            return f"{str(macs)} MACs"
+    elif units == "GMACs":
+        return f"{str(round(macs / 10.0**9, precision))} {units}"
+    elif units == "KMACs":
+        return f"{str(round(macs / 10.0**3, precision))} {units}"
+    elif units == "MMACs":
+        return f"{str(round(macs / 10.0**6, precision))} {units}"
     else:
-        if units == "GMACs":
-            return str(round(macs / 10.0**9, precision)) + " " + units
-        elif units == "MMACs":
-            return str(round(macs / 10.0**6, precision)) + " " + units
-        elif units == "KMACs":
-            return str(round(macs / 10.0**3, precision)) + " " + units
-        else:
-            return str(macs) + " MACs"
+        return f"{str(macs)} MACs"
 
 
 def flops_to_string(flops, units=None, precision=2):
     if units is None:
         if flops // 10**12 > 0:
-            return str(round(flops / 10.0**12, precision)) + " TFLOPS"
+            return f"{str(round(flops / 10.0**12, precision))} TFLOPS"
         if flops // 10**9 > 0:
-            return str(round(flops / 10.0**9, precision)) + " GFLOPS"
+            return f"{str(round(flops / 10.0**9, precision))} GFLOPS"
         elif flops // 10**6 > 0:
-            return str(round(flops / 10.0**6, precision)) + " MFLOPS"
+            return f"{str(round(flops / 10.0**6, precision))} MFLOPS"
         elif flops // 10**3 > 0:
-            return str(round(flops / 10.0**3, precision)) + " KFLOPS"
+            return f"{str(round(flops / 10.0**3, precision))} KFLOPS"
         else:
-            return str(flops) + " FLOPS"
+            return f"{str(flops)} FLOPS"
     else:
         if units == "TFLOPS":
-            return str(round(flops / 10.0**12, precision)) + " " + units
+            return f"{str(round(flops / 10.0**12, precision))} {units}"
         if units == "GFLOPS":
-            return str(round(flops / 10.0**9, precision)) + " " + units
-        elif units == "MFLOPS":
-            return str(round(flops / 10.0**6, precision)) + " " + units
+            return f"{str(round(flops / 10.0**9, precision))} {units}"
         elif units == "KFLOPS":
-            return str(round(flops / 10.0**3, precision)) + " " + units
+            return f"{str(round(flops / 10.0**3, precision))} {units}"
+        elif units == "MFLOPS":
+            return f"{str(round(flops / 10.0**6, precision))} {units}"
         else:
-            return str(flops) + " FLOPS"
+            return f"{str(flops)} FLOPS"
 
 
 def params_to_string(params_num, units=None, precision=2):
     if units is None:
         if params_num // 10**6 > 0:
-            return str(round(params_num / 10**6, 2)) + " M"
+            return f"{str(round(params_num / 10**6, 2))} M"
         elif params_num // 10**3:
-            return str(round(params_num / 10**3, 2)) + " k"
+            return f"{str(round(params_num / 10**3, 2))} k"
         else:
             return str(params_num)
+    elif units == "K":
+        return f"{str(round(params_num / 10.0**3, precision))} {units}"
+    elif units == "M":
+        return f"{str(round(params_num / 10.0**6, precision))} {units}"
     else:
-        if units == "M":
-            return str(round(params_num / 10.0**6, precision)) + " " + units
-        elif units == "K":
-            return str(round(params_num / 10.0**3, precision)) + " " + units
-        else:
-            return str(params_num)
+        return str(params_num)
 
 
 def duration_to_string(duration, units=None, precision=2):
     if units is None:
         if duration > 1:
-            return str(round(duration, precision)) + " s"
+            return f"{str(round(duration, precision))} s"
         elif duration * 10**3 > 1:
-            return str(round(duration * 10**3, precision)) + " ms"
+            return f"{str(round(duration * 10**3, precision))} ms"
         elif duration * 10**6 > 1:
-            return str(round(duration * 10**6, precision)) + " us"
+            return f"{str(round(duration * 10**6, precision))} us"
         else:
             return str(duration)
+    elif units == "ms":
+        return f"{str(round(duration * 10.0**3, precision))} {units}"
+    elif units == "us":
+        return f"{str(round(duration * 10.0**6, precision))} {units}"
     else:
-        if units == "us":
-            return str(round(duration * 10.0**6, precision)) + " " + units
-        elif units == "ms":
-            return str(round(duration * 10.0**3, precision)) + " " + units
-        else:
-            return str(round(duration, precision)) + " s"
+        return f"{str(round(duration, precision))} s"
 
 
     # can not iterate over all submodules using self.model.modules()

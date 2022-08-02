@@ -109,7 +109,7 @@ class InferenceEngine(Module):
             local_rank = int(os.getenv('LOCAL_RANK', '0'))
             torch.cuda.set_device(local_rank)
 
-            ranks = [i for i in range(self.mp_world_size)]
+            ranks = list(range(self.mp_world_size))
             self.mp_group = dist.new_group(ranks)
             InferenceEngine.inference_mp_group = self.mp_group
         else:
@@ -121,7 +121,7 @@ class InferenceEngine(Module):
         self.quantize_groups = 1
         if type(quantization_setting) is tuple:
             self.mlp_extra_grouping, \
-            self.quantize_groups = quantization_setting
+                self.quantize_groups = quantization_setting
         elif quantization_setting is not None:
             self.quantize_groups = quantization_setting
         logger.info(f"quantize_bits = {self.quantize_bits} "
@@ -193,10 +193,6 @@ class InferenceEngine(Module):
 
         self.quantization_scales, self.quantize_merge_count = quantize_config
 
-        if is_pipe_parallel:
-            # Pipeline parallelism uses this to load its own checkpoint files.
-            self._curr_ckpt_path = load_dir
-
         self.module.load_state_dict(state_dict=checkpoint['model'],
                                     strict=load_module_strict)
 
@@ -227,21 +223,19 @@ class InferenceEngine(Module):
             *inputs: Variable length input list
             **kwargs: variable length keyword arguments
         """
-        if self.mp_world_size > 1:
-            if self.mpu is None:
-                for input in inputs:
-                    if torch.is_tensor(input):
-                        input = input.to(torch.cuda.current_device())
-                        if not input.is_contiguous():
-                            input = input.contiguous()
-                for k in kwargs:
-                    if torch.is_tensor(kwargs[k]):
-                        kwargs[k] = kwargs[k].to(torch.cuda.current_device())
-                        if not kwargs[k].is_contiguous():
-                            kwargs[k] = kwargs[k].contiguous()
-                        dist.broadcast(kwargs[k], 0)
+        if self.mp_world_size <= 1:
+            return self.module(*inputs, **kwargs)
+        if self.mpu is None:
+            for input in inputs:
+                if torch.is_tensor(input):
+                    input = input.to(torch.cuda.current_device())
+                    if not input.is_contiguous():
+                        input = input.contiguous()
+            for k, v in kwargs.items():
+                if torch.is_tensor(v):
+                    kwargs[k] = kwargs[k].to(torch.cuda.current_device())
+                    if not kwargs[k].is_contiguous():
+                        kwargs[k] = kwargs[k].contiguous()
+                    dist.broadcast(kwargs[k], 0)
 
-            outputs = self.model_orig_fwd(*inputs, **kwargs)
-        else:
-            outputs = self.module(*inputs, **kwargs)
-        return outputs
+        return self.model_orig_fwd(*inputs, **kwargs)

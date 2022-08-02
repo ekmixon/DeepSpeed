@@ -62,8 +62,9 @@ class CurriculumScheduler(object):
             assert "root_degree" in config['schedule_config'], "Curriculum learning with fixed_root schedule requires the schedule_config 'root_degree'"
             if config['schedule_config']['difficulty_step'] % 8 != 0:
                 logger.warning(
-                    f'The difficulty_step for curriculum learning has to be multiple of 8 (for FP16 data) or 16 (for INT8 data) to enable NVIDIA Tensor Core acceleration. Disregard this warning if this is unrelated to your hardware.'
+                    'The difficulty_step for curriculum learning has to be multiple of 8 (for FP16 data) or 16 (for INT8 data) to enable NVIDIA Tensor Core acceleration. Disregard this warning if this is unrelated to your hardware.'
                 )
+
             self.state['schedule'] = config['schedule_config']
         elif config['schedule_type'] == 'fixed_linear':
             """
@@ -78,8 +79,9 @@ class CurriculumScheduler(object):
             assert "difficulty_step" in config['schedule_config'], "Curriculum learning with fixed_linear schedule requires the schedule_config 'difficulty_step'"
             if config['schedule_config']['difficulty_step'] % 8 != 0:
                 logger.warning(
-                    f'The difficulty_step for curriculum learning has to be multiple of 8 (for FP16 data) or 16 (for INT8 data) to enable NVIDIA Tensor Core acceleration. Disregard this warning if this is unrelated to your hardware.'
+                    'The difficulty_step for curriculum learning has to be multiple of 8 (for FP16 data) or 16 (for INT8 data) to enable NVIDIA Tensor Core acceleration. Disregard this warning if this is unrelated to your hardware.'
                 )
+
             self.state['schedule'] = config['schedule_config']
         else:
             raise RuntimeError('Unsupported curriculum schedule type')

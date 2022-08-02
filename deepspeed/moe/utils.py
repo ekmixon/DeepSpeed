@@ -3,9 +3,7 @@ import torch
 
 
 def is_moe_param(param: torch.Tensor) -> bool:
-    if hasattr(param, "allreduce") and not param.allreduce:
-        return True
-    return False
+    return bool(hasattr(param, "allreduce") and not param.allreduce)
 
 
 def split_params_into_shared_and_expert_params(

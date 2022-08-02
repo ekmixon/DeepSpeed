@@ -29,7 +29,7 @@ class SDLoaderFactory:
         if sd_type == 'Megatron':
             return MegatronSDLoader(ckpt_list, version)
         else:
-            assert False, '{} checkpoint type is not supported'.format(sd_type)
+            assert False, f'{sd_type} checkpoint type is not supported'
 
 
 class SDLoaderBase(ABC):
@@ -90,10 +90,10 @@ class SDLoaderBase(ABC):
                 all_scales = None
         elif num_ckpt > mp_world_size:
             sd, all_scales, merge_count = self.merge_state_dict(mp_world_size, mp_rank, quantize, \
-                quantize_bits, quantize_groups, mlp_extra_grouping)
+                    quantize_bits, quantize_groups, mlp_extra_grouping)
         else:
             sd, all_scales = self.split_state_dict(mp_world_size, mp_rank, quantize, quantize_bits, \
-                quantize_groups, mlp_extra_grouping)
+                    quantize_groups, mlp_extra_grouping)
         return load_path, sd, (all_scales, merge_count)
 
     def get_merge_state_dicts(self, mp_world_size, mp_rank):
@@ -107,12 +107,10 @@ class SDLoaderBase(ABC):
         ]
 
         logger.info(f"mp_rank: {mp_rank}, ckpt_list: {ckpt_list}")
-        sd_list = [
-            torch.load(ckpt,
-                       map_location=lambda storage,
-                       loc: storage) for ckpt in ckpt_list
+        return [
+            torch.load(ckpt, map_location=lambda storage, loc: storage)
+            for ckpt in ckpt_list
         ]
-        return sd_list
 
     def get_split_state_dict(self, mp_world_size, mp_rank):
         num_ckpt = len(self.ckpt_list)
@@ -133,7 +131,10 @@ class SDLoaderBase(ABC):
         return sd, num_to_split, ckpt_offset
 
     def _choose_module_key(self, sd):
-        assert not ('module' in sd and 'model' in sd), "checkpoint has both 'model' and 'module' keys, not sure how to proceed"
+        assert (
+            'module' not in sd or 'model' not in sd
+        ), "checkpoint has both 'model' and 'module' keys, not sure how to proceed"
+
         assert 'module' in sd or 'model' in sd, "checkpoint contains neither 'model' or 'module' keys, not sure how to proceed"
         if 'module' in sd:
             return 'module'
@@ -251,7 +252,7 @@ class MegatronSDLoader(SDLoaderBase):
                 tensor_tuple = [t[i] for t in split_tensors]
                 tensors.append(torch.cat(tensor_tuple, axis=0))
             new_qkv = torch.cat(tensors, axis=0)
-        elif ckpt_ver == 1.0 or ckpt_ver == 2.0:
+        elif ckpt_ver in [1.0, 2.0]:
             # [(np * hn * 3), h] or [(np * 3 * hn), h]
             new_qkv = torch.cat(param_list, axis=0)
         else:
@@ -287,11 +288,13 @@ class MegatronSDLoader(SDLoaderBase):
             assert split_tensors[0].shape[0] % num_to_split == 0
             split_size = split_tensors[0].shape[0] // num_to_split
 
-            tensors = []
-            for i in range(3):
-                tensors.append(torch.split(split_tensors[i], split_size, dim=0)[offset])
+            tensors = [
+                torch.split(split_tensors[i], split_size, dim=0)[offset]
+                for i in range(3)
+            ]
+
             new_qkv = torch.cat(tensors, axis=0)
-        elif ckpt_ver == 1.0 or ckpt_ver == 2.0:
+        elif ckpt_ver in [1.0, 2.0]:
             # [(np * hn * 3), h] or [(np * 3 * hn), h]
             assert param.shape[0] % num_to_split == 0
             size_qkv = param.shape[0] // num_to_split
@@ -342,13 +345,12 @@ class MegatronSDLoader(SDLoaderBase):
                                                     groups,
                                                     key=key)
                     new_client_sd[key] = torch.cat(value_list, axis=0)
+                elif quantize:
+                    new_client_sd[key] = torch.cat(value_list, axis=0)
                 else:
-                    if quantize:
-                        new_client_sd[key] = torch.cat(value_list, axis=0)
-                    else:
-                        new_client_sd[key] = self.merge_query_key_value(
-                            value_list,
-                            ckpt_ver)
+                    new_client_sd[key] = self.merge_query_key_value(
+                        value_list,
+                        ckpt_ver)
             elif "mlp.dense_h_to_4h.weight" in key or "word_embeddings.weight" in key or "mlp.dense_h_to_4h.bias" in key:
                 if quantize and "mlp.dense_h_to_4h.weight" in key:
                     value_list = quantizer.Quantize(value_list,

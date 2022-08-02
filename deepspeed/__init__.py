@@ -120,11 +120,11 @@ def initialize(args=None,
         * ``lr_scheduler``: Wrapped lr scheduler if user ``lr_scheduler`` is passed, or
           if ``lr_scheduler`` specified in JSON configuration. Otherwise ``None``.
     """
-    log_dist("DeepSpeed info: version={}, git-hash={}, git-branch={}".format(
-        __version__,
-        __git_hash__,
-        __git_branch__),
-             ranks=[0])
+    log_dist(
+        f"DeepSpeed info: version={__version__}, git-hash={__git_hash__}, git-branch={__git_branch__}",
+        ranks=[0],
+    )
+
     assert model is not None, "deepspeed.initialize requires a model"
 
     if not isinstance(model, PipelineModule):
@@ -274,11 +274,11 @@ def init_inference(model,
     Returns:
         A deepspeed.InferenceEngine wrapped model.
     """
-    log_dist("DeepSpeed info: version={}, git-hash={}, git-branch={}".format(
-        __version__,
-        __git_hash__,
-        __git_branch__),
-             ranks=[0])
+    log_dist(
+        f"DeepSpeed info: version={__version__}, git-hash={__git_hash__}, git-branch={__git_branch__}",
+        ranks=[0],
+    )
+
 
     if isinstance(model, PipelineModule):
         raise NotImplementedError("pipeline module support is not implemented yet")

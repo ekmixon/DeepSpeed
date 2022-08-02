@@ -70,11 +70,11 @@ class HFBertLayerPolicy(DSPolicy):
         qkvb = torch.cat((qb, kb, vb), dim=0)
 
         return self.linear_layer, \
-               qkvw, \
-               qkvb, \
-               self.client_module.attention.output.dense.weight.data, \
-               self.client_module.attention.output.dense.bias.data, \
-               self.scale_attention
+                   qkvw, \
+                   qkvb, \
+                   self.client_module.attention.output.dense.weight.data, \
+                   self.client_module.attention.output.dense.bias.data, \
+                   self.scale_attention
 
     def mlp(self):
         if self.preln:
@@ -83,8 +83,8 @@ class HFBertLayerPolicy(DSPolicy):
             intermediate_ff = self.client_module.intermediate.dense
 
         return self.linear_layer, intermediate_ff.weight.data, intermediate_ff.bias.data, \
-            self.client_module.output.dense.weight.data, \
-            self.client_module.output.dense.bias.data
+                self.client_module.output.dense.weight.data, \
+                self.client_module.output.dense.bias.data
 
     def layerNorm(self):
         if self.preln:
@@ -123,11 +123,11 @@ class HFGPTNEOLayerPolicy(DSPolicy):
         qkvw = torch.cat((qw, kw, vw), dim=0)
 
         return self.linear_layer, \
-                qkvw, \
-                None, \
-                self.client_module.attn.attention.out_proj.weight.data, \
-                self.client_module.attn.attention.out_proj.bias.data, \
-                self.scale_attention
+                    qkvw, \
+                    None, \
+                    self.client_module.attn.attention.out_proj.weight.data, \
+                    self.client_module.attn.attention.out_proj.bias.data, \
+                    self.scale_attention
 
     def mlp(self):
         return self.linear_layer, \
@@ -172,11 +172,11 @@ class MegatronLayerPolicy(DSPolicy):
                 attention = self.client_module.self_attention
 
         return self.linear_layer, \
-                attention.query_key_value.weight.data, \
-                attention.query_key_value.bias.data, \
-                attention.dense.weight.data, \
-                attention.dense.bias.data, \
-                self.scale_attention
+                    attention.query_key_value.weight.data, \
+                    attention.query_key_value.bias.data, \
+                    attention.dense.weight.data, \
+                    attention.dense.bias.data, \
+                    self.scale_attention
 
     def mlp(self):
         return self.linear_layer, \

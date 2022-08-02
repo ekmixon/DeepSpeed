@@ -65,9 +65,10 @@ def nvcc_version():
     if cuda_home is None:
         return f"{RED} [FAIL] cannot find CUDA_HOME via torch.utils.cpp_extension.CUDA_HOME={torch.utils.cpp_extension.CUDA_HOME} {END}"
     try:
-        output = subprocess.check_output([cuda_home + "/bin/nvcc",
-                                          "-V"],
-                                         universal_newlines=True)
+        output = subprocess.check_output(
+            [f"{cuda_home}/bin/nvcc", "-V"], universal_newlines=True
+        )
+
     except FileNotFoundError:
         return f"{RED} [FAIL] nvcc missing {END}"
     output_split = output.split()
